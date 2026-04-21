@@ -122,17 +122,6 @@ class _CreateEntryScreenState extends State<CreateEntryScreen> {
     );
   }
 
-  Future<void> _checkRemainingEntries() async {
-    try {
-      final limits = await _apiService.getUserLimits(widget.phone);
-      setState(() {
-        _remainingEntries = limits['remaining_entries'] ?? 0;
-      });
-    } catch (e) {
-      // Ignore error, will show default
-    }
-  }
-
   Future<void> _verifyPNR() async {
     if (_pnrController.text.trim().length != 10) {
       ScaffoldMessenger.of(context).showSnackBar(
