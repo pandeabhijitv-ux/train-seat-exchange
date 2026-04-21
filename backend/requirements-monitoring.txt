@@ -1,0 +1,4 @@
+# System monitoring
+psutil==5.9.6
+# Error tracking
+sentry-sdk==1.39.1

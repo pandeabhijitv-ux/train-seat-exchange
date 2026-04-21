@@ -1,0 +1,5 @@
+# Additional security packages
+slowapi==0.1.9  # Rate limiting
+python-jose[cryptography]==3.3.0  # JWT tokens
+passlib[bcrypt]==1.7.4  # Password hashing
+cryptography==41.0.7  # Encryption
