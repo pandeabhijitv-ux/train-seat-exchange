@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Train Seat Exchange</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <span class="logo">🚆</span>
+      <h1>Train Seat Exchange</h1>
+    </div>
+  </header>
+
+  <main>
+    <!-- How-to panel -->
+    <section class="info-panel">
+      <h2>How it works</h2>
+      <ol>
+        <li><strong>Select a seat</strong> – click any booked (blue) seat to pick the seat you currently hold.</li>
+        <li><strong>Choose a target</strong> – click another booked seat to request an exchange.</li>
+        <li><strong>Confirm</strong> – both seats swap instantly in this demo.</li>
+        <li>Click a <span class="available-badge">green</span> seat to book it as a new passenger.</li>
+      </ol>
+
+      <div class="legend">
+        <span class="legend-item"><span class="seat-demo available"></span> Available</span>
+        <span class="legend-item"><span class="seat-demo booked"></span> Booked</span>
+        <span class="legend-item"><span class="seat-demo selected"></span> Selected (you)</span>
+        <span class="legend-item"><span class="seat-demo exchange-target"></span> Exchange target</span>
+      </div>
+    </section>
+
+    <!-- Coach tabs -->
+    <div class="coach-tabs" id="coachTabs"></div>
+
+    <!-- Seat grid -->
+    <section class="coach-view" id="coachView">
+      <div class="train-car">
+        <div class="car-header">
+          <span id="coachLabel">Coach A</span>
+          <span id="coachStats"></span>
+        </div>
+        <div class="seat-grid" id="seatGrid"></div>
+      </div>
+    </section>
+
+    <!-- Action panel -->
+    <section class="action-panel" id="actionPanel" aria-live="polite">
+      <p id="actionMsg">Select a booked seat to start an exchange, or an available seat to book it.</p>
+      <div class="action-buttons" id="actionButtons"></div>
+    </section>
+
+    <!-- Exchange log -->
+    <section class="log-panel">
+      <h2>Exchange Log</h2>
+      <ul id="exchangeLog"><li class="log-empty">No exchanges yet.</li></ul>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

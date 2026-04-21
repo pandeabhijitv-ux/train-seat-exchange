@@ -1,0 +1,153 @@
+/* ===== Reset & base ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --clr-bg:        #f4f6f9;
+  --clr-surface:   #ffffff;
+  --clr-primary:   #1a56db;
+  --clr-primary-dk:#1342b0;
+  --clr-available: #16a34a;
+  --clr-booked:    #2563eb;
+  --clr-selected:  #f59e0b;
+  --clr-target:    #dc2626;
+  --clr-text:      #1e293b;
+  --clr-muted:     #64748b;
+  --clr-border:    #e2e8f0;
+  --radius:        8px;
+  --shadow:        0 2px 8px rgba(0,0,0,.10);
+}
+
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  background: var(--clr-bg);
+  color: var(--clr-text);
+  min-height: 100vh;
+}
+
+/* ===== Header ===== */
+header {
+  background: var(--clr-primary);
+  color: #fff;
+  padding: 1rem 2rem;
+  box-shadow: var(--shadow);
+}
+.header-inner { display: flex; align-items: center; gap: .75rem; max-width: 900px; margin: 0 auto; }
+.logo { font-size: 1.8rem; }
+header h1 { font-size: 1.4rem; font-weight: 700; letter-spacing: .5px; }
+
+/* ===== Main ===== */
+main { max-width: 900px; margin: 2rem auto; padding: 0 1rem; display: flex; flex-direction: column; gap: 1.5rem; }
+
+/* ===== Panels ===== */
+.info-panel,
+.coach-view,
+.action-panel,
+.log-panel {
+  background: var(--clr-surface);
+  border: 1px solid var(--clr-border);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.5rem;
+  box-shadow: var(--shadow);
+}
+
+h2 { font-size: 1rem; font-weight: 700; margin-bottom: .75rem; color: var(--clr-primary); }
+
+/* ===== Legend ===== */
+.legend { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: .75rem; }
+.legend-item { display: flex; align-items: center; gap: .4rem; font-size: .85rem; }
+.seat-demo {
+  display: inline-block; width: 22px; height: 22px;
+  border-radius: 4px; border: 2px solid transparent;
+}
+.seat-demo.available   { background: var(--clr-available); }
+.seat-demo.booked      { background: var(--clr-booked); }
+.seat-demo.selected    { background: var(--clr-selected); }
+.seat-demo.exchange-target { background: var(--clr-target); }
+.available-badge { display: inline-block; width: 12px; height: 12px; border-radius: 2px; background: var(--clr-available); vertical-align: middle; }
+
+/* ===== Coach tabs ===== */
+.coach-tabs { display: flex; gap: .5rem; flex-wrap: wrap; }
+.coach-tab {
+  padding: .5rem 1.25rem;
+  border: 2px solid var(--clr-border);
+  border-radius: var(--radius);
+  background: var(--clr-surface);
+  cursor: pointer;
+  font-weight: 600;
+  transition: background .15s, border-color .15s;
+}
+.coach-tab:hover  { border-color: var(--clr-primary); }
+.coach-tab.active { background: var(--clr-primary); color: #fff; border-color: var(--clr-primary); }
+
+/* ===== Train car ===== */
+.car-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 1rem; font-weight: 700; font-size: .95rem;
+}
+#coachStats { font-size: .82rem; color: var(--clr-muted); font-weight: 400; }
+
+/* ===== Seat grid ===== */
+.seat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: .55rem;
+}
+
+/* Aisle visual – every 4 columns add a gap after the 2nd */
+.seat-grid { column-gap: .55rem; }
+.seat-grid .aisle { width: 100%; height: 1px; grid-column: span 4; } /* spacer rows */
+
+.seat {
+  aspect-ratio: 1;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font-size: .72rem; font-weight: 700;
+  transition: transform .1s, box-shadow .1s, border-color .1s;
+  user-select: none;
+  position: relative;
+}
+.seat:hover { transform: scale(1.08); box-shadow: 0 4px 12px rgba(0,0,0,.18); }
+.seat:focus-visible { outline: 3px solid var(--clr-primary); outline-offset: 2px; }
+
+.seat.available   { background: var(--clr-available); color: #fff; }
+.seat.booked      { background: var(--clr-booked);    color: #fff; }
+.seat.selected    { background: var(--clr-selected);  color: #fff; border-color: #b45309; }
+.seat.exchange-target { background: var(--clr-target); color: #fff; border-color: #991b1b; }
+
+.seat-label { font-size: .68rem; }
+.seat-name  { font-size: .82rem; line-height: 1; }
+
+/* Row label column */
+.seat-grid-wrapper { display: flex; gap: .5rem; align-items: flex-start; }
+.row-labels { display: flex; flex-direction: column; gap: .55rem; padding-top: 0; }
+.row-label  { font-size: .7rem; color: var(--clr-muted); display: flex; align-items: center; justify-content: flex-end; padding-right: .3rem; }
+
+/* ===== Action panel ===== */
+.action-panel { border-left: 4px solid var(--clr-primary); }
+#actionMsg { margin-bottom: .75rem; font-size: .95rem; }
+.action-buttons { display: flex; gap: .75rem; flex-wrap: wrap; }
+.btn {
+  padding: .5rem 1.25rem;
+  border: none; border-radius: var(--radius);
+  font-weight: 600; cursor: pointer; font-size: .9rem;
+  transition: background .15s;
+}
+.btn-confirm { background: var(--clr-available); color: #fff; }
+.btn-confirm:hover { background: #15803d; }
+.btn-cancel  { background: #e2e8f0; color: var(--clr-text); }
+.btn-cancel:hover  { background: #cbd5e1; }
+
+/* ===== Log ===== */
+.log-panel ul { list-style: none; display: flex; flex-direction: column; gap: .4rem; }
+.log-panel li { font-size: .88rem; padding: .4rem .6rem; background: var(--clr-bg); border-radius: 4px; }
+.log-empty { color: var(--clr-muted); font-style: italic; }
+.log-exchange { border-left: 3px solid var(--clr-available); }
+.log-book     { border-left: 3px solid var(--clr-booked); }
+
+/* ===== Responsive ===== */
+@media (max-width: 600px) {
+  .seat-grid { grid-template-columns: repeat(4, 1fr); gap: .4rem; }
+  .seat { font-size: .62rem; }
+}
