@@ -1,18 +1,28 @@
 import 'package:flutter/material.dart';
+
+import '../models/user_profile.dart';
 import '../services/api_service.dart';
+import '../services/user_profile_service.dart';
 import 'create_entry_screen.dart';
 
 class OTPScreen extends StatefulWidget {
-  const OTPScreen({super.key});
+  final bool navigateToCreateEntry;
+
+  const OTPScreen({
+    super.key,
+    this.navigateToCreateEntry = false,
+  });
 
   @override
   State<OTPScreen> createState() => _OTPScreenState();
 }
 
 class _OTPScreenState extends State<OTPScreen> {
+  final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _otpController = TextEditingController();
   final _apiService = ApiService();
+  final _userProfileService = UserProfileService();
   
   bool _isLoading = false;
   bool _otpSent = false;
@@ -20,6 +30,7 @@ class _OTPScreenState extends State<OTPScreen> {
 
   @override
   void dispose() {
+    _nameController.dispose();
     _phoneController.dispose();
     _otpController.dispose();
     super.dispose();
@@ -74,6 +85,13 @@ class _OTPScreenState extends State<OTPScreen> {
   }
 
   Future<void> _verifyOtp() async {
+    if (_nameController.text.trim().length < 2) {
+      setState(() {
+        _errorMessage = 'Please enter your full name';
+      });
+      return;
+    }
+
     if (_otpController.text.length < 4) {
       setState(() {
         _errorMessage = 'Please enter valid OTP';
@@ -88,14 +106,33 @@ class _OTPScreenState extends State<OTPScreen> {
 
     try {
       await _apiService.verifyOtp(_phoneController.text, _otpController.text);
-      
-      if (mounted) {
+      final registration = await _apiService.registerUser(
+        phone: _phoneController.text,
+        name: _nameController.text.trim(),
+      );
+      final userJson = registration['user'] as Map<String, dynamic>;
+      await _userProfileService.saveProfile(UserProfile.fromJson(userJson));
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(registration['message'] ?? 'Registration complete'),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      if (widget.navigateToCreateEntry) {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
             builder: (context) => CreateEntryScreen(phone: _phoneController.text),
           ),
         );
+      } else {
+        Navigator.pop(context, true);
       }
     } catch (e) {
       setState(() {
@@ -109,15 +146,15 @@ class _OTPScreenState extends State<OTPScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Phone Verification'),
+        title: const Text('Register & Verify'),
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
-              'Enter your phone number',
+              'Create your verified profile',
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
@@ -125,12 +162,22 @@ class _OTPScreenState extends State<OTPScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'We\'ll send you an OTP to verify your number',
+              'We\'ll verify your phone and use it as your contact number for seat exchange.',
               style: TextStyle(color: Colors.grey),
             ),
             const SizedBox(height: 32),
+
+            TextField(
+              controller: _nameController,
+              textCapitalization: TextCapitalization.words,
+              enabled: !_otpSent,
+              decoration: const InputDecoration(
+                labelText: 'Full Name',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
             
-            // Phone Number Field
             TextField(
               controller: _phoneController,
               keyboardType: TextInputType.phone,
@@ -144,8 +191,21 @@ class _OTPScreenState extends State<OTPScreen> {
               ),
             ),
             const SizedBox(height: 16),
+
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange.shade200),
+              ),
+              child: const Text(
+                'By continuing, you agree that your registered phone number can be shown to other verified passengers when a seat exchange match is found.',
+                style: TextStyle(fontSize: 13),
+              ),
+            ),
+            const SizedBox(height: 16),
             
-            // Send OTP Button
             if (!_otpSent)
               ElevatedButton(
                 onPressed: _isLoading ? null : _sendOtp,
@@ -161,7 +221,6 @@ class _OTPScreenState extends State<OTPScreen> {
                     : const Text('Send OTP'),
               ),
             
-            // OTP Field
             if (_otpSent) ...[
               TextField(
                 controller: _otpController,
@@ -193,7 +252,6 @@ class _OTPScreenState extends State<OTPScreen> {
               ),
             ],
             
-            // Error Message
             if (_errorMessage != null) ...[
               const SizedBox(height: 16),
               Container(

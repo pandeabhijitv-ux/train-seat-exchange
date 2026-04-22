@@ -1,9 +1,39 @@
 import 'package:flutter/material.dart';
+
+import '../services/user_profile_service.dart';
+import 'create_entry_screen.dart';
+import 'my_entries_screen.dart';
 import 'otp_screen.dart';
 import 'search_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
+
+  Future<void> _openCreateFlow(BuildContext context) async {
+    final profile = await UserProfileService().getProfile();
+    if (!context.mounted) {
+      return;
+    }
+
+    if (profile != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => CreateEntryScreen(phone: profile.phone),
+        ),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const OTPScreen(
+          navigateToCreateEntry: true,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -12,12 +42,10 @@ class HomeScreen extends StatelessWidget {
         title: const Text('Train Seat Exchange'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          children: [
               Icon(
                 Icons.train,
                 size: 100,
@@ -45,14 +73,7 @@ class HomeScreen extends StatelessWidget {
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const OTPScreen(),
-                      ),
-                    );
-                  },
+                  onPressed: () => _openCreateFlow(context),
                   icon: const Icon(Icons.add),
                   label: const Text(
                     'Create Exchange Request',
@@ -80,6 +101,26 @@ class HomeScreen extends StatelessWidget {
                   icon: const Icon(Icons.search),
                   label: const Text(
                     'Search Available Exchanges',
+                    style: TextStyle(fontSize: 16),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const MyEntriesScreen(),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.list_alt_outlined),
+                  label: const Text(
+                    'My Active Entries',
                     style: TextStyle(fontSize: 16),
                   ),
                 ),
@@ -143,7 +184,6 @@ class HomeScreen extends StatelessWidget {
               ),
             ],
           ),
-        ),
       ),
     );
   }

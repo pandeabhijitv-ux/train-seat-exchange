@@ -239,6 +239,9 @@ class _CreateEntryScreenState extends State<CreateEntryScreen> {
       final result = await _apiService.createEntry(entry: entry);
 
       if (result['success'] == true) {
+        final int matchCount = result['match_count'] as int? ?? 0;
+        final List<dynamic> matches = result['matches'] as List<dynamic>? ?? [];
+
         // Increment local counter
         final newCount = await _limitService.incrementEntryCount();
         final remaining = await _limitService.getRemainingEntries();
@@ -259,6 +262,39 @@ class _CreateEntryScreenState extends State<CreateEntryScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text('Your seat exchange request is now live.'),
+                  if (matchCount > 0) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade50,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.green.shade300),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Great news! $matchCount potential match(es) found.',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green.shade900,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          ...matches.take(2).map((raw) {
+                            final match = raw as Map<String, dynamic>;
+                            return Text(
+                              '${match['current_bogie']}-${match['current_seat']} '
+                              'wants ${match['desired_bogie']}-${match['desired_seat']} '
+                              '• ${match['phone']}',
+                              style: const TextStyle(fontSize: 12),
+                            );
+                          }),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   Text(
                     'Entries used: $newCount/10',

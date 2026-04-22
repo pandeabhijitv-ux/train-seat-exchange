@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../models/user_profile.dart';
 import '../services/api_service.dart';
-import '../models/seat_entry.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../services/user_profile_service.dart';
+import 'otp_screen.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -12,28 +15,35 @@ class SearchScreen extends StatefulWidget {
 
 class _SearchScreenState extends State<SearchScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _pnrController = TextEditingController();
   final _trainNumberController = TextEditingController();
   final _trainDateController = TextEditingController();
-  final _bogieController = TextEditingController();
-  
-  // Proximity search fields (optional)
   final _currentBogieController = TextEditingController();
   final _currentSeatController = TextEditingController();
   final _desiredBogieController = TextEditingController();
   final _desiredSeatController = TextEditingController();
-  
+
   final ApiService _apiService = ApiService();
-  
+  final UserProfileService _userProfileService = UserProfileService();
+
   List<dynamic> _searchResults = [];
+  UserProfile? _profile;
   bool _isLoading = false;
+  bool _isFetchingPnr = false;
   bool _hasSearched = false;
-  bool _useProximitySearch = false;  // Toggle for smart search
+  bool _pnrVerified = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
 
   @override
   void dispose() {
+    _pnrController.dispose();
     _trainNumberController.dispose();
     _trainDateController.dispose();
-    _bogieController.dispose();
     _currentBogieController.dispose();
     _currentSeatController.dispose();
     _desiredBogieController.dispose();
@@ -41,24 +51,66 @@ class _SearchScreenState extends State<SearchScreen> {
     super.dispose();
   }
 
-  Future<void> _selectDate() async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 120)),
-    );
-    
-    if (picked != null) {
+  Future<void> _loadProfile() async {
+    final profile = await _userProfileService.getProfile();
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _profile = profile;
+    });
+  }
+
+  Future<void> _verifyPnr() async {
+    if (_pnrController.text.trim().length != 10) {
+      _showSnackBar('PNR must be 10 digits', Colors.red);
+      return;
+    }
+
+    setState(() {
+      _isFetchingPnr = true;
+    });
+
+    try {
+      final result = await _apiService.verifyPNR(_pnrController.text.trim());
+      if (!mounted) {
+        return;
+      }
+
       setState(() {
-        _trainDateController.text = 
-            "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
+        _trainNumberController.text = result['train_number'] ?? '';
+        _trainDateController.text = result['date_of_journey'] ?? '';
+        _currentBogieController.text = result['bogie'] ?? '';
+        _currentSeatController.text = result['seat_number'] ?? '';
+        _pnrVerified = true;
+        _isFetchingPnr = false;
       });
+
+      _showSnackBar('PNR verified. Current seat details loaded.', Colors.green);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _isFetchingPnr = false;
+        _pnrVerified = false;
+      });
+      _showSnackBar(error.toString(), Colors.red);
     }
   }
 
   Future<void> _searchEntries() async {
     if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    if (!_pnrVerified) {
+      _showSnackBar(
+        'Verify your PNR first so the app can search nearby seats correctly.',
+        Colors.orange,
+      );
       return;
     }
 
@@ -68,73 +120,83 @@ class _SearchScreenState extends State<SearchScreen> {
     });
 
     try {
+      final desiredBogie = _desiredBogieController.text.trim().toUpperCase();
       final results = await _apiService.searchEntries(
         trainNumber: _trainNumberController.text.trim(),
         trainDate: _trainDateController.text.trim(),
-        bogie: _bogieController.text.trim().isEmpty 
-            ? null 
-            : _bogieController.text.trim(),
-        // Pass proximity parameters if smart search is enabled
-        currentBogie: _useProximitySearch && _currentBogieController.text.isNotEmpty
-            ? _currentBogieController.text.trim()
-            : null,
-        currentSeat: _useProximitySearch && _currentSeatController.text.isNotEmpty
-            ? _currentSeatController.text.trim()
-            : null,
-        desiredBogie: _useProximitySearch && _desiredBogieController.text.isNotEmpty
-            ? _desiredBogieController.text.trim()
-            : null,
-        desiredSeat: _useProximitySearch && _desiredSeatController.text.isNotEmpty
-            ? _desiredSeatController.text.trim()
-            : null,
+        bogie: desiredBogie.isEmpty ? null : desiredBogie,
+        requesterPhone: _profile?.phone,
+        currentBogie: _currentBogieController.text.trim().toUpperCase(),
+        currentSeat: _currentSeatController.text.trim().toUpperCase(),
+        desiredBogie: desiredBogie,
+        desiredSeat: _desiredSeatController.text.trim().toUpperCase(),
       );
+
+      if (!mounted) {
+        return;
+      }
 
       setState(() {
         _searchResults = results;
         _isLoading = false;
       });
-    } catch (e) {
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
       setState(() {
         _isLoading = false;
       });
-      
+      _showSnackBar('Search failed: ${error.toString()}', Colors.red);
+    }
+  }
+
+  Future<void> _openVerificationFlow() async {
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const OTPScreen(),
+      ),
+    );
+
+    if (result == true) {
+      await _loadProfile();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Search failed: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+        _showSnackBar(
+          'Verification complete. Contact numbers are now visible.',
+          Colors.green,
         );
       }
     }
   }
 
-  Future<void> _makePhoneCall(String phoneNumber) async {
-    final Uri phoneUri = Uri(scheme: 'tel', path: phoneNumber);
-    if (await canLaunchUrl(phoneUri)) {
-      await launchUrl(phoneUri);
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not open phone dialer'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+  Future<void> _copyPhone(String phone) async {
+    await Clipboard.setData(ClipboardData(text: phone));
+    if (!mounted) {
+      return;
     }
+    _showSnackBar('Phone number copied.', Colors.green);
+  }
+
+  void _showSnackBar(String message, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: color,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Search Seat Exchanges'),
+        title: const Text('Search By PNR'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
       body: Column(
         children: [
-          // Search Form
           Container(
             padding: const EdgeInsets.all(16),
             color: Colors.grey.shade100,
@@ -142,192 +204,163 @@ class _SearchScreenState extends State<SearchScreen> {
               key: _formKey,
               child: Column(
                 children: [
-                  // Smart Search Toggle
-                  SwitchListTile(
-                    title: const Text(
-                      '🎯 Smart Search (sort by proximity)',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: const Text('Show best matches first'),
-                    value: _useProximitySearch,
-                    onChanged: (value) {
-                      setState(() {
-                        _useProximitySearch = value;
-                      });
-                    },
-                    activeColor: Colors.green,
-                    contentPadding: EdgeInsets.zero,
+                  _buildRegistrationBanner(),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _pnrController,
+                          keyboardType: TextInputType.number,
+                          maxLength: 10,
+                          decoration: const InputDecoration(
+                            labelText: 'PNR Number',
+                            hintText: 'Enter 10-digit PNR',
+                            prefixIcon: Icon(Icons.confirmation_number_outlined),
+                            border: OutlineInputBorder(),
+                            counterText: '',
+                            filled: true,
+                            fillColor: Colors.white,
+                          ),
+                          validator: (value) {
+                            if (value == null || value.trim().length != 10) {
+                              return 'Enter 10-digit PNR';
+                            }
+                            return null;
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        height: 56,
+                        child: ElevatedButton(
+                          onPressed: _isFetchingPnr ? null : _verifyPnr,
+                          child: _isFetchingPnr
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Text('Fetch'),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 12),
-                  
-                  TextFormField(
-                    controller: _trainNumberController,
-                    decoration: const InputDecoration(
-                      labelText: 'Train Number',
-                      hintText: 'e.g., 12345',
-                      prefixIcon: Icon(Icons.train),
-                      border: OutlineInputBorder(),
-                      filled: true,
-                      fillColor: Colors.white,
-                    ),
-                    keyboardType: TextInputType.number,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter train number';
-                      }
-                      if (value.length < 5) {
-                        return 'Train number must be at least 5 digits';
-                      }
-                      return null;
-                    },
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _trainNumberController,
+                          readOnly: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Train Number',
+                            border: OutlineInputBorder(),
+                            filled: true,
+                            fillColor: Colors.white,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _trainDateController,
+                          readOnly: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Journey Date',
+                            border: OutlineInputBorder(),
+                            filled: true,
+                            fillColor: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _trainDateController,
-                    decoration: const InputDecoration(
-                      labelText: 'Train Date',
-                      hintText: 'YYYY-MM-DD',
-                      prefixIcon: Icon(Icons.calendar_today),
-                      border: OutlineInputBorder(),
-                      filled: true,
-                      fillColor: Colors.white,
-                    ),
-                    readOnly: true,
-                    onTap: _selectDate,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please select train date';
-                      }
-                      return null;
-                    },
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _currentBogieController,
+                          readOnly: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Your Current Bogie',
+                            border: OutlineInputBorder(),
+                            filled: true,
+                            fillColor: Colors.white,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _currentSeatController,
+                          readOnly: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Your Current Seat',
+                            border: OutlineInputBorder(),
+                            filled: true,
+                            fillColor: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _bogieController,
-                    decoration: const InputDecoration(
-                      labelText: 'Bogie (Optional)',
-                      hintText: 'e.g., B3, A2',
-                      prefixIcon: Icon(Icons.filter_alt),
-                      border: OutlineInputBorder(),
-                      filled: true,
-                      fillColor: Colors.white,
-                    ),
-                    textCapitalization: TextCapitalization.characters,
-                  ),
-                  
-                  // Proximity Search Fields (shown when toggle is on)
-                  if (_useProximitySearch) ...[
-                    const SizedBox(height: 16),
-                    const Divider(),
-                    const SizedBox(height: 8),
-                    const Text(
-                      '📍 Your Current & Desired Seats',
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Where do you want to move?',
                       style: TextStyle(
-                        fontSize: 14,
+                        color: Colors.grey.shade800,
                         fontWeight: FontWeight.bold,
-                        color: Colors.blue,
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: _currentBogieController,
-                            decoration: const InputDecoration(
-                              labelText: 'Your Bogie',
-                              hintText: 'B3',
-                              prefixIcon: Icon(Icons.location_on),
-                              border: OutlineInputBorder(),
-                              filled: true,
-                              fillColor: Colors.white,
-                            ),
-                            textCapitalization: TextCapitalization.characters,
-                            validator: _useProximitySearch
-                                ? (value) {
-                                    if (value == null || value.isEmpty) {
-                                      return 'Required for smart search';
-                                    }
-                                    return null;
-                                  }
-                                : null,
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _desiredBogieController,
+                          textCapitalization: TextCapitalization.characters,
+                          decoration: const InputDecoration(
+                            labelText: 'Desired Bogie',
+                            hintText: 'A2 / B3',
+                            border: OutlineInputBorder(),
+                            filled: true,
+                            fillColor: Colors.white,
                           ),
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Required';
+                            }
+                            return null;
+                          },
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: TextFormField(
-                            controller: _currentSeatController,
-                            decoration: const InputDecoration(
-                              labelText: 'Your Seat',
-                              hintText: '45UB',
-                              border: OutlineInputBorder(),
-                              filled: true,
-                              fillColor: Colors.white,
-                            ),
-                            textCapitalization: TextCapitalization.characters,
-                            validator: _useProximitySearch
-                                ? (value) {
-                                    if (value == null || value.isEmpty) {
-                                      return 'Required';
-                                    }
-                                    return null;
-                                  }
-                                : null,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _desiredSeatController,
+                          textCapitalization: TextCapitalization.characters,
+                          decoration: const InputDecoration(
+                            labelText: 'Desired Seat',
+                            hintText: '12LB',
+                            border: OutlineInputBorder(),
+                            filled: true,
+                            fillColor: Colors.white,
                           ),
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Required';
+                            }
+                            return null;
+                          },
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: _desiredBogieController,
-                            decoration: const InputDecoration(
-                              labelText: 'Want Bogie',
-                              hintText: 'A2',
-                              prefixIcon: Icon(Icons.emoji_objects),
-                              border: OutlineInputBorder(),
-                              filled: true,
-                              fillColor: Colors.white,
-                            ),
-                            textCapitalization: TextCapitalization.characters,
-                            validator: _useProximitySearch
-                                ? (value) {
-                                    if (value == null || value.isEmpty) {
-                                      return 'Required for smart search';
-                                    }
-                                    return null;
-                                  }
-                                : null,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: TextFormField(
-                            controller: _desiredSeatController,
-                            decoration: const InputDecoration(
-                              labelText: 'Want Seat',
-                              hintText: '12LB',
-                              border: OutlineInputBorder(),
-                              filled: true,
-                              fillColor: Colors.white,
-                            ),
-                            textCapitalization: TextCapitalization.characters,
-                            validator: _useProximitySearch
-                                ? (value) {
-                                    if (value == null || value.isEmpty) {
-                                      return 'Required';
-                                    }
-                                    return null;
-                                  }
-                                : null,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                  
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 16),
                   SizedBox(
                     width: double.infinity,
@@ -344,7 +377,9 @@ class _SearchScreenState extends State<SearchScreen> {
                               ),
                             )
                           : const Icon(Icons.search),
-                      label: Text(_isLoading ? 'Searching...' : 'Search'),
+                      label: Text(
+                        _isLoading ? 'Searching...' : 'Find Probable Matches',
+                      ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Theme.of(context).colorScheme.primary,
                         foregroundColor: Colors.white,
@@ -355,11 +390,58 @@ class _SearchScreenState extends State<SearchScreen> {
               ),
             ),
           ),
-          
-          // Results
           Expanded(
             child: _buildResultsSection(),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRegistrationBanner() {
+    final isRegistered = _profile != null;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isRegistered ? Colors.green.shade50 : Colors.orange.shade50,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isRegistered ? Colors.green.shade200 : Colors.orange.shade200,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            isRegistered
+                ? 'Verified as ${_profile!.name} (${_profile!.phone})'
+                : 'Verify your phone to see full contact numbers.',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: isRegistered ? Colors.green.shade900 : Colors.orange.shade900,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            isRegistered
+                ? 'You can now view and copy other passengers\' full phone numbers.'
+                : 'Unverified users can still search, but contact numbers stay masked until registration is completed.',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey.shade800,
+            ),
+          ),
+          if (!isRegistered) ...[
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: _openVerificationFlow,
+                child: const Text('Verify Now'),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -375,10 +457,11 @@ class _SearchScreenState extends State<SearchScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.search, size: 64, color: Colors.grey),
+            Icon(Icons.travel_explore, size: 64, color: Colors.grey),
             SizedBox(height: 16),
             Text(
-              'Enter train details to search',
+              'Enter PNR and desired seat to find the nearest exchanges',
+              textAlign: TextAlign.center,
               style: TextStyle(fontSize: 16, color: Colors.grey),
             ),
           ],
@@ -399,7 +482,8 @@ class _SearchScreenState extends State<SearchScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Try searching for a different train or date',
+              'No one has posted a matching request for this train yet.',
+              textAlign: TextAlign.center,
               style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
             ),
           ],
@@ -414,7 +498,8 @@ class _SearchScreenState extends State<SearchScreen> {
         final entry = _searchResults[index];
         final proximityDetails = entry['proximity_details'];
         final hasProximity = proximityDetails != null;
-        
+        final contactVisible = entry['contact_visible'] == true;
+
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
           elevation: hasProximity ? 3 : 1,
@@ -434,10 +519,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: Colors.orange.shade100,
                         borderRadius: BorderRadius.circular(12),
@@ -452,13 +534,10 @@ class _SearchScreenState extends State<SearchScreen> {
                     ),
                   ],
                 ),
-                
-                // Proximity Badge (if proximity search was used)
                 if (hasProximity) ...[
                   const SizedBox(height: 8),
-                  _buildProximityBadge(proximityDetails),
+                  _buildProximityBadge(proximityDetails as Map),
                 ],
-                
                 const SizedBox(height: 12),
                 Row(
                   children: [
@@ -468,10 +547,7 @@ class _SearchScreenState extends State<SearchScreen> {
                         children: [
                           Text(
                             'HAS',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey.shade600,
-                            ),
+                            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                           ),
                           const SizedBox(height: 4),
                           Text(
@@ -492,10 +568,7 @@ class _SearchScreenState extends State<SearchScreen> {
                         children: [
                           Text(
                             'WANTS',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey.shade600,
-                            ),
+                            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                           ),
                           const SizedBox(height: 4),
                           Text(
@@ -514,18 +587,56 @@ class _SearchScreenState extends State<SearchScreen> {
                 const SizedBox(height: 12),
                 const Divider(),
                 const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () => _makePhoneCall(entry['phone']),
-                    icon: const Icon(Icons.phone),
-                    label: Text('Call ${entry['phone']}'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      foregroundColor: Colors.white,
+                if (contactVisible)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SelectableText(
+                          entry['phone'] as String,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: () => _copyPhone(entry['phone'] as String),
+                        icon: const Icon(Icons.copy),
+                        label: const Text('Copy Number'),
+                      ),
+                    ],
+                  )
+                else
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Contact: ${entry['phone']}',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 6),
+                        const Text(
+                          'Register with OTP to see and copy the full contact number.',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: _openVerificationFlow,
+                            child: const Text('Verify to View Number'),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ),
               ],
             ),
           ),
@@ -533,45 +644,39 @@ class _SearchScreenState extends State<SearchScreen> {
       },
     );
   }
-  
+
   Widget _buildProximityBadge(Map proximityDetails) {
     final matchQuality = proximityDetails['match_quality'] ?? 'fair';
     final seatDistance = proximityDetails['desired_seat_distance'] ?? 0;
     final bogieDistance = proximityDetails['desired_bogie_distance'] ?? 0;
     final isSameBogie = proximityDetails['is_same_bogie'] ?? false;
-    
-    // Determine badge color and icon
+
     Color badgeColor;
     Color textColor;
-    String icon;
     String label;
-    
+
     switch (matchQuality) {
       case 'excellent':
         badgeColor = Colors.green.shade100;
         textColor = Colors.green.shade900;
-        icon = '🟢';
         label = 'Excellent Match';
         break;
       case 'good':
         badgeColor = Colors.lightGreen.shade100;
         textColor = Colors.lightGreen.shade900;
-        icon = '🟡';
         label = 'Good Match';
         break;
       case 'fair':
         badgeColor = Colors.orange.shade100;
         textColor = Colors.orange.shade900;
-        icon = '🟠';
         label = 'Fair Match';
         break;
       default:
         badgeColor = Colors.red.shade100;
         textColor = Colors.red.shade900;
-        icon = '🔴';
         label = 'Poor Match';
     }
-    
+
     return Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
@@ -579,34 +684,15 @@ class _SearchScreenState extends State<SearchScreen> {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: textColor.withOpacity(0.3)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(icon, style: const TextStyle(fontSize: 16)),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: textColor,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            isSameBogie
-                ? '📍 Same bogie • $seatDistance seats away'
-                : '📍 $bogieDistance bogies away • $seatDistance seats',
-            style: TextStyle(
-              fontSize: 12,
-              color: textColor.withOpacity(0.8),
-            ),
-          ),
-        ],
+      child: Text(
+        isSameBogie
+            ? '$label • Same bogie • $seatDistance seats away'
+            : '$label • $bogieDistance bogies away • $seatDistance seats away',
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.bold,
+          color: textColor,
+        ),
       ),
     );
   }

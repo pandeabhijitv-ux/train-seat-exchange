@@ -7,6 +7,7 @@ class ApiConfig {
   static const String verifyOtp = '/otp/verify';
   static const String createEntry = '/entry/create';
   static const String searchEntry = '/entry/search';
+  static const String myActiveEntries = '/entry/my-active'; // Append /{phone}
   static const String verifyPnr = '/pnr/verify';
   static const String getUserLimits = '/user/limits'; // Append /{phone}
   

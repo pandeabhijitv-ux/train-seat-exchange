@@ -45,6 +45,33 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>> registerUser({
+    required String phone,
+    required String name,
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/user/register',
+        data: {
+          'phone': phone,
+          'name': name,
+        },
+      );
+      return response.data;
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> getUserProfile(String phone) async {
+    try {
+      final response = await _dio.get('/user/profile/$phone');
+      return response.data;
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
   // ========== PNR Verification ==========
   
   Future<Map<String, dynamic>> verifyPNR(String pnr) async {
@@ -92,6 +119,7 @@ class ApiService {
     required String trainNumber,
     required String trainDate,
     String? bogie,
+    String? requesterPhone,
     String? currentBogie,
     String? currentSeat,
     String? desiredBogie,
@@ -102,6 +130,7 @@ class ApiService {
         'train_number': trainNumber,
         'train_date': trainDate,
         if (bogie != null) 'bogie': bogie,
+        if (requesterPhone != null) 'requester_phone': requesterPhone,
         if (currentBogie != null) 'current_bogie': currentBogie,
         if (currentSeat != null) 'current_seat': currentSeat,
         if (desiredBogie != null) 'desired_bogie': desiredBogie,
@@ -115,6 +144,15 @@ class ApiService {
       
       final List<dynamic> responseData = response.data;
       return responseData;
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> getMyActiveEntries(String phone) async {
+    try {
+      final response = await _dio.get('${ApiConfig.myActiveEntries}/$phone');
+      return response.data;
     } on DioException catch (e) {
       throw _handleError(e);
     }

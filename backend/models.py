@@ -22,6 +22,27 @@ class OTPVerifyRequest(BaseModel):
     otp: str = Field(..., min_length=4, max_length=6)
 
 
+class UserRegisterRequest(BaseModel):
+    """Request to register a verified user profile"""
+    phone: str = Field(..., min_length=10, max_length=10)
+    name: str = Field(..., min_length=2, max_length=80)
+
+    @validator('name')
+    def validate_name(cls, value):
+        cleaned = value.strip()
+        if len(cleaned) < 2:
+            raise ValueError('Name must be at least 2 characters')
+        return cleaned
+
+
+class UserProfileResponse(BaseModel):
+    """Response for a registered user profile"""
+    phone: str
+    name: str
+    created_at: str
+    last_verified_at: str
+
+
 class SeatExchangeEntry(BaseModel):
     """Request to create seat exchange entry"""
     phone: str = Field(..., min_length=10, max_length=10)
@@ -58,6 +79,7 @@ class SearchRequest(BaseModel):
     train_number: str = Field(..., min_length=5, max_length=10)
     train_date: str = Field(..., description="Train date (YYYY-MM-DD)")
     bogie: Optional[str] = Field(None, max_length=10, description="Filter by bogie")
+    requester_phone: Optional[str] = Field(None, min_length=10, max_length=10)
     
     # Optional: For proximity-based sorting
     current_bogie: Optional[str] = Field(None, max_length=10, description="User's current bogie")
@@ -70,6 +92,7 @@ class EntryResponse(BaseModel):
     """Response for seat exchange entry"""
     id: int
     phone: str
+    contact_visible: bool = False
     train_number: str
     train_date: str
     departure_time: str
