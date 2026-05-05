@@ -4,6 +4,7 @@ pydantic==2.5.3
 pydantic-settings==2.1.0
 python-multipart==0.0.6
 httpx==0.26.0
+firebase-admin==6.5.0
 razorpay==1.4.1
 apscheduler==3.10.4
 python-dotenv==1.0.0

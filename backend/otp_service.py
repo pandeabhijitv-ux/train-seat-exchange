@@ -12,6 +12,7 @@ class OTPService:
         self.auth_key = settings.msg91_auth_key
         self.sender_id = settings.msg91_sender_id
         self.route = settings.msg91_route
+        self.template_id = getattr(settings, 'msg91_template_id', None)
         self.base_url = "https://api.msg91.com/api/v5"
         
         # In-memory OTP storage (for production, use Redis)
@@ -32,30 +33,45 @@ class OTPService:
             'expiry': expiry_time,
             'verified': False
         }
+
+        if not self.auth_key:
+            if settings.debug:
+                print(f"DEBUG MODE: OTP for {phone} is {otp}")
+                return {
+                    "success": True,
+                    "message": "DEBUG: OTP generated locally (check console)",
+                    "debug_otp": otp
+                }
+
+            return {
+                "success": False,
+                "message": "MSG91 is not configured. Use Firebase Phone Auth for production."
+            }
         
         # Send SMS via MSG91
         try:
             async with httpx.AsyncClient() as client:
-                url = f"{self.base_url}/otp"
-                params = {
-                    "template_id": "your_template_id_here",  # Create template in MSG91 dashboard
-                    "mobile": f"91{phone}",  # Indian country code
-                    "authkey": self.auth_key,
-                    "otp": otp
-                }
-                
-                # Alternative: Use Flow API with custom template
-                # For now, using simple SMS API
-                sms_url = "https://api.msg91.com/api/sendhttp.php"
-                sms_params = {
-                    "authkey": self.auth_key,
-                    "mobiles": f"91{phone}",
-                    "message": f"Your OTP for Train Seat Exchange is {otp}. Valid for {settings.otp_expiry_minutes} minutes.",
-                    "sender": self.sender_id,
-                    "route": self.route
-                }
-                
-                response = await client.get(sms_url, params=sms_params, timeout=10.0)
+                if self.template_id:
+                    # Preferred production flow with approved DLT template.
+                    otp_url = f"{self.base_url}/otp"
+                    otp_params = {
+                        "template_id": self.template_id,
+                        "mobile": f"91{phone}",
+                        "authkey": self.auth_key,
+                        "otp": otp,
+                    }
+                    response = await client.get(otp_url, params=otp_params, timeout=10.0)
+                else:
+                    # Fallback for development/testing when template ID is not configured.
+                    sms_url = "https://api.msg91.com/api/sendhttp.php"
+                    sms_params = {
+                        "authkey": self.auth_key,
+                        "mobiles": f"91{phone}",
+                        "message": f"Your OTP for Train Seat Exchange is {otp}. Valid for {settings.otp_expiry_minutes} minutes.",
+                        "sender": self.sender_id,
+                        "route": self.route
+                    }
+                    response = await client.get(sms_url, params=sms_params, timeout=10.0)
                 
                 if response.status_code == 200:
                     return {

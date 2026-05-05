@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../models/user_profile.dart';
 import '../services/api_service.dart';
+import '../services/firebase_bootstrap_service.dart';
 import '../services/user_profile_service.dart';
 import 'create_entry_screen.dart';
 
@@ -27,6 +29,8 @@ class _OTPScreenState extends State<OTPScreen> {
   bool _isLoading = false;
   bool _otpSent = false;
   String? _errorMessage;
+  String? _verificationId;
+  int? _resendToken;
 
   @override
   void dispose() {
@@ -37,6 +41,13 @@ class _OTPScreenState extends State<OTPScreen> {
   }
 
   Future<void> _sendOtp() async {
+    if (_nameController.text.trim().length < 2) {
+      setState(() {
+        _errorMessage = 'Please enter your full name';
+      });
+      return;
+    }
+
     if (_phoneController.text.length != 10) {
       setState(() {
         _errorMessage = 'Please enter a valid 10-digit phone number';
@@ -50,32 +61,46 @@ class _OTPScreenState extends State<OTPScreen> {
     });
 
     try {
-      final result = await _apiService.sendOtp(_phoneController.text);
-      
-      setState(() {
-        _otpSent = true;
-        _isLoading = false;
-      });
+      await FirebaseBootstrapService.ensureInitialized();
+      await FirebaseAuth.instance.verifyPhoneNumber(
+        phoneNumber: '+91${_phoneController.text}',
+        forceResendingToken: _resendToken,
+        verificationCompleted: (credential) async {
+          await _completeRegistration(credential, successMessage: 'Phone verified automatically');
+        },
+        verificationFailed: (exception) {
+          if (!mounted) {
+            return;
+          }
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result['message'] ?? 'OTP sent successfully'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        
-        // Show debug OTP if available (development mode)
-        if (result.containsKey('debug_otp')) {
+          setState(() {
+            _isLoading = false;
+            _errorMessage = exception.message ?? 'Failed to send OTP';
+          });
+        },
+        codeSent: (verificationId, resendToken) {
+          if (!mounted) {
+            return;
+          }
+
+          setState(() {
+            _verificationId = verificationId;
+            _resendToken = resendToken;
+            _otpSent = true;
+            _isLoading = false;
+          });
+
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Debug OTP: ${result['debug_otp']}'),
-              duration: const Duration(seconds: 10),
-              backgroundColor: Colors.orange,
+            const SnackBar(
+              content: Text('OTP sent successfully'),
+              backgroundColor: Colors.green,
             ),
           );
-        }
-      }
+        },
+        codeAutoRetrievalTimeout: (verificationId) {
+          _verificationId = verificationId;
+        },
+      );
     } catch (e) {
       setState(() {
         _errorMessage = e.toString();
@@ -105,40 +130,63 @@ class _OTPScreenState extends State<OTPScreen> {
     });
 
     try {
-      await _apiService.verifyOtp(_phoneController.text, _otpController.text);
-      final registration = await _apiService.registerUser(
-        phone: _phoneController.text,
-        name: _nameController.text.trim(),
-      );
-      final userJson = registration['user'] as Map<String, dynamic>;
-      await _userProfileService.saveProfile(UserProfile.fromJson(userJson));
-
-      if (!mounted) {
-        return;
+      final verificationId = _verificationId;
+      if (verificationId == null || verificationId.isEmpty) {
+        throw StateError('OTP session expired. Please request a new OTP.');
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(registration['message'] ?? 'Registration complete'),
-          backgroundColor: Colors.green,
-        ),
+      final credential = PhoneAuthProvider.credential(
+        verificationId: verificationId,
+        smsCode: _otpController.text.trim(),
       );
 
-      if (widget.navigateToCreateEntry) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => CreateEntryScreen(phone: _phoneController.text),
-          ),
-        );
-      } else {
-        Navigator.pop(context, true);
-      }
+      await _completeRegistration(credential);
     } catch (e) {
       setState(() {
         _errorMessage = e.toString();
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _completeRegistration(
+    PhoneAuthCredential credential, {
+    String successMessage = 'Registration complete',
+  }) async {
+    final userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+    final firebaseUser = userCredential.user;
+    if (firebaseUser == null) {
+      throw StateError('Phone verification failed. Please try again.');
+    }
+
+    await firebaseUser.getIdToken(true);
+    final registration = await _apiService.registerUser(
+      phone: _phoneController.text,
+      name: _nameController.text.trim(),
+    );
+    final userJson = registration['user'] as Map<String, dynamic>;
+    await _userProfileService.saveProfile(UserProfile.fromJson(userJson));
+
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(registration['message'] ?? successMessage),
+        backgroundColor: Colors.green,
+      ),
+    );
+
+    if (widget.navigateToCreateEntry) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => CreateEntryScreen(phone: _phoneController.text),
+        ),
+      );
+    } else {
+      Navigator.pop(context, true);
     }
   }
 
@@ -162,7 +210,7 @@ class _OTPScreenState extends State<OTPScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'We\'ll verify your phone and use it as your contact number for seat exchange.',
+              'We\'ll verify your phone using Firebase and use it as your contact number for seat exchange.',
               style: TextStyle(color: Colors.grey),
             ),
             const SizedBox(height: 32),

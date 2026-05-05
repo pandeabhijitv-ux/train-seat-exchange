@@ -1,4 +1,6 @@
 import 'package:dio/dio.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
 import '../config/api_config.dart';
 import '../models/seat_entry.dart';
 
@@ -15,6 +17,24 @@ class ApiService {
       },
     ),
   );
+
+  Future<Options?> _authOptions() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      return null;
+    }
+
+    final idToken = await user.getIdToken();
+    if (idToken == null || idToken.isEmpty) {
+      return null;
+    }
+
+    return Options(
+      headers: {
+        'Authorization': 'Bearer $idToken',
+      },
+    );
+  }
 
   // ========== OTP Methods ==========
   
@@ -50,12 +70,14 @@ class ApiService {
     required String name,
   }) async {
     try {
+      final options = await _authOptions();
       final response = await _dio.post(
         '/user/register',
         data: {
           'phone': phone,
           'name': name,
         },
+        options: options,
       );
       return response.data;
     } on DioException catch (e) {
@@ -65,7 +87,10 @@ class ApiService {
 
   Future<Map<String, dynamic>> getUserProfile(String phone) async {
     try {
-      final response = await _dio.get('/user/profile/$phone');
+      final response = await _dio.get(
+        '/user/profile/$phone',
+        options: await _authOptions(),
+      );
       return response.data;
     } on DioException catch (e) {
       throw _handleError(e);
@@ -92,6 +117,7 @@ class ApiService {
     try {
       final response = await _dio.get(
         '${ApiConfig.getUserLimits}/$phone',
+        options: await _authOptions(),
       );
       return response.data;
     } on DioException catch (e) {
@@ -104,10 +130,12 @@ class ApiService {
   Future<Map<String, dynamic>> createEntry({required SeatEntry entry}) async {
     try {
       final data = entry.toJson();
+      final options = await _authOptions();
       
       final response = await _dio.post(
         ApiConfig.createEntry,
         data: data,
+        options: options,
       );
       return response.data;
     } on DioException catch (e) {
@@ -140,6 +168,7 @@ class ApiService {
       final response = await _dio.post(
         ApiConfig.searchEntry,
         data: data,
+        options: await _authOptions(),
       );
       
       final List<dynamic> responseData = response.data;
@@ -151,7 +180,10 @@ class ApiService {
 
   Future<Map<String, dynamic>> getMyActiveEntries(String phone) async {
     try {
-      final response = await _dio.get('${ApiConfig.myActiveEntries}/$phone');
+      final response = await _dio.get(
+        '${ApiConfig.myActiveEntries}/$phone',
+        options: await _authOptions(),
+      );
       return response.data;
     } on DioException catch (e) {
       throw _handleError(e);

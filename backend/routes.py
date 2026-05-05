@@ -1,9 +1,10 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from models import (
     PhoneVerifyRequest, OTPVerifyRequest, SeatExchangeEntry, SearchRequest,
     EntryResponse, UserRegisterRequest, UserProfileResponse
 )
 from otp_service import otp_service
+from firebase_auth_service import firebase_auth_service
 from pnr_service import pnr_service
 from database import db
 from user_limits import user_limits
@@ -13,6 +14,28 @@ from typing import List
 from pydantic import BaseModel
 
 router = APIRouter()
+
+
+def _get_bearer_token(request: Request) -> str | None:
+    authorization = request.headers.get("Authorization", "")
+    if not authorization.startswith("Bearer "):
+        return None
+    return authorization[7:].strip() or None
+
+
+def _get_authenticated_phone(request: Request, expected_phone: str | None = None) -> str | None:
+    token = _get_bearer_token(request)
+    if not token:
+        return None
+
+    try:
+        verified = firebase_auth_service.verify_id_token(token, expected_phone)
+        return verified["phone"]
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid Firebase authentication token: {str(exc)}",
+        ) from exc
 
 
 def _mask_phone(phone: str) -> str:
@@ -78,12 +101,14 @@ async def verify_otp(request: OTPVerifyRequest):
 
 
 @router.post("/user/register", response_model=dict)
-async def register_user(request: UserRegisterRequest):
+async def register_user(request: UserRegisterRequest, raw_request: Request):
     """Register or refresh a verified user profile"""
-    if not otp_service.is_phone_verified(request.phone):
+    authenticated_phone = _get_authenticated_phone(raw_request, request.phone)
+
+    if authenticated_phone != request.phone and not otp_service.is_phone_verified(request.phone):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Phone number must be OTP verified before registration."
+            detail="Phone number must be Firebase-authenticated or OTP verified before registration."
         )
 
     user = user_registry.register_user(request.phone, request.name)
@@ -95,8 +120,15 @@ async def register_user(request: UserRegisterRequest):
 
 
 @router.get("/user/profile/{phone}", response_model=UserProfileResponse)
-async def get_user_profile(phone: str):
+async def get_user_profile(phone: str, raw_request: Request):
     """Fetch a registered user profile"""
+    authenticated_phone = _get_authenticated_phone(raw_request)
+    if authenticated_phone and authenticated_phone != phone:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Authenticated phone number does not match requested profile."
+        )
+
     profile = user_registry.get_user(phone)
     if not profile:
         raise HTTPException(
@@ -110,12 +142,19 @@ async def get_user_profile(phone: str):
 # ============== User Limits Endpoint ==============
 
 @router.get("/user/limits/{phone}")
-async def get_user_limits(phone: str):
+async def get_user_limits(phone: str, raw_request: Request):
     """Get user entry limits"""
     if len(phone) != 10:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid phone number format"
+        )
+
+    authenticated_phone = _get_authenticated_phone(raw_request)
+    if authenticated_phone and authenticated_phone != phone:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Authenticated phone number does not match requested user."
         )
     
     total_entries = user_limits.get_user_entry_count(phone)
@@ -134,13 +173,27 @@ async def get_user_limits(phone: str):
 # ============== Seat Exchange Endpoints ==============
 
 @router.post("/entry/create", response_model=dict)
-async def create_entry(request: SeatExchangeEntry):
+async def create_entry(request: SeatExchangeEntry, raw_request: Request):
     """Create seat exchange entry"""
-    
-    if not otp_service.is_phone_verified(request.phone) and not user_registry.is_registered(request.phone):
+
+    authenticated_phone = _get_authenticated_phone(raw_request)
+
+    if authenticated_phone:
+        if authenticated_phone != request.phone:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Authenticated phone number does not match entry phone number."
+            )
+    elif not otp_service.is_phone_verified(request.phone):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Phone number not registered or verified."
+            detail="Phone number must be authenticated before creating an entry."
+        )
+
+    if not user_registry.is_registered(request.phone):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Complete phone verification and registration before creating an entry."
         )
     
     # Check for duplicate entry (one entry per train per phone)
@@ -182,11 +235,14 @@ async def create_entry(request: SeatExchangeEntry):
 
 
 @router.post("/entry/search", response_model=List[EntryResponse])
-async def search_entries(request: SearchRequest):
+async def search_entries(request: SearchRequest, raw_request: Request):
     """Search for seat exchange entries with optional proximity sorting"""
     try:
+        authenticated_phone = _get_authenticated_phone(raw_request)
         can_view_contact = bool(
-            request.requester_phone and user_registry.is_registered(request.requester_phone)
+            request.requester_phone and
+            authenticated_phone == request.requester_phone and
+            user_registry.is_registered(request.requester_phone)
         )
 
         entries = db.search_entries(
@@ -225,12 +281,19 @@ async def search_entries(request: SearchRequest):
 
 
 @router.get("/entry/my-active/{phone}", response_model=dict)
-async def get_my_active_entries(phone: str):
+async def get_my_active_entries(phone: str, raw_request: Request):
     """Get a user's currently active entries and reciprocal match previews."""
     if len(phone) != 10 or not phone.isdigit():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid phone number format"
+        )
+
+    authenticated_phone = _get_authenticated_phone(raw_request, phone)
+    if authenticated_phone != phone:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Firebase authentication is required to view your active entries."
         )
 
     can_view_contact = user_registry.is_registered(phone)

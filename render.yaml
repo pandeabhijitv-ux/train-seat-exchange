@@ -8,7 +8,6 @@ services:
     buildCommand: |
       cd backend
       pip install -r requirements.txt
-      pip install -r requirements-postgres.txt
       pip install -r requirements-security.txt
       pip install -r requirements-monitoring.txt
     startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT --workers 2
@@ -17,22 +16,20 @@ services:
         value: production
       - key: DEBUG
         value: false
-      - key: DATABASE_URL
-        fromDatabase:
-          name: train-exchange-db
-          property: connectionString
-      - key: MSG91_AUTH_KEY
-        sync: false
+      - key: DB_FOLDER
+        value: /opt/render/project/src/backend/data
       - key: RAZORPAY_KEY_ID
         sync: false
       - key: RAZORPAY_KEY_SECRET
         sync: false
       - key: RAPIDAPI_KEY
         sync: false
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_CREDENTIALS_PATH
+        value: /etc/secrets/firebase-service-account.json
     healthCheckPath: /health
-    
-databases:
-  - name: train-exchange-db
-    plan: starter
-    databaseName: train_exchange
-    user: trainuser
+
+# Attach a persistent disk manually in the Render dashboard.
+# Mount path: /opt/render/project/src/backend/data
+# Size: 2 GB

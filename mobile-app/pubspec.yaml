@@ -1,7 +1,7 @@
 name: train_seat_exchange
 description: Train seat exchange mobile app for Indian Railways passengers
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.0+2
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -12,6 +12,10 @@ dependencies:
   
   # UI
   cupertino_icons: ^1.0.6
+
+  # Firebase
+  firebase_auth: ^5.1.2
+  firebase_core: ^3.3.0
   
   # State Management
   provider: ^6.1.1

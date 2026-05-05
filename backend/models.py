@@ -87,6 +87,14 @@ class SearchRequest(BaseModel):
     desired_bogie: Optional[str] = Field(None, max_length=10, description="User's desired bogie")
     desired_seat: Optional[str] = Field(None, max_length=10, description="User's desired seat")
 
+    @validator('requester_phone')
+    def validate_requester_phone(cls, value):
+        if value is None:
+            return value
+        if not value.isdigit():
+            raise ValueError('Phone number must contain only digits')
+        return value
+
 
 class EntryResponse(BaseModel):
     """Response for seat exchange entry"""

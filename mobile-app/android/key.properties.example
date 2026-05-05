@@ -1,0 +1,8 @@
+# Copy this file to android/key.properties and fill in your real release keystore values.
+# Keep android/key.properties private. It is already ignored by git.
+
+storePassword=CHANGE_ME
+keyPassword=CHANGE_ME
+keyAlias=upload
+# Absolute path or path relative to mobile-app/android/app
+storeFile=../upload-keystore.jks

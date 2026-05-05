@@ -11,3 +11,9 @@ mobile-app/build/
 mobile-app/.flutter-plugins
 mobile-app/.flutter-plugins-dependencies
 mobile-app/.packages
+
+# Android signing secrets
+mobile-app/upload-keystore.jks
+mobile-app/android/key.properties
+*.jks
+*.keystore

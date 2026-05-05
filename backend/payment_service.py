@@ -9,9 +9,11 @@ class PaymentService:
     """Service for handling Razorpay payments"""
     
     def __init__(self):
-        self.client = razorpay.Client(
-            auth=(settings.razorpay_key_id, settings.razorpay_key_secret)
-        )
+        self.client = None
+        if settings.razorpay_key_id and settings.razorpay_key_secret:
+            self.client = razorpay.Client(
+                auth=(settings.razorpay_key_id, settings.razorpay_key_secret)
+            )
         self.entry_amount = 500  # ₹5 in paise
         
         # In-memory payment tracking (for production, use database/Redis)
@@ -21,6 +23,12 @@ class PaymentService:
         """Create a Razorpay order for payment"""
         if amount is None:
             amount = self.entry_amount
+
+        if self.client is None or not settings.razorpay_key_id:
+            return {
+                "success": False,
+                "message": "Razorpay is not configured."
+            }
         
         try:
             order_data = {
@@ -53,6 +61,12 @@ class PaymentService:
     def verify_payment(self, order_id: str, payment_id: str, signature: str) -> Dict:
         """Verify Razorpay payment signature"""
         try:
+            if self.client is None or not settings.razorpay_key_secret:
+                return {
+                    "success": False,
+                    "message": "Razorpay is not configured."
+                }
+
             # Generate signature
             message = f"{order_id}|{payment_id}"
             expected_signature = hmac.new(
