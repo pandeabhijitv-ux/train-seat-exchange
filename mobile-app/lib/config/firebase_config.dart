@@ -15,7 +15,7 @@ class FirebaseConfig {
   }
 
   static FirebaseOptions get options {
-    return const FirebaseOptions(
+    return FirebaseOptions(
       apiKey: apiKey,
       appId: appId,
       messagingSenderId: messagingSenderId,
