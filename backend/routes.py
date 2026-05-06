@@ -2,12 +2,13 @@ from fastapi import APIRouter, HTTPException, Request, status
 from models import (
     PhoneVerifyRequest, OTPVerifyRequest, SeatExchangeEntry, SearchRequest,
     EntryResponse, UserRegisterRequest, UserProfileResponse,
-    SubscriptionOrderRequest, SubscriptionVerifyRequest,
+    SubscriptionOrderRequest, SubscriptionVerifyRequest, PlaySubscriptionVerifyRequest,
 )
 from otp_service import otp_service
 from firebase_auth_service import firebase_auth_service
 from payment_service import payment_service
 from subscription_service import subscription_service
+from google_play_billing_service import google_play_billing_service
 from pnr_service import pnr_service
 from database import db
 from user_limits import user_limits
@@ -334,6 +335,69 @@ async def verify_subscription_payment(request: SubscriptionVerifyRequest, raw_re
         "success": True,
         "message": "Subscription activated successfully.",
         "subscription": activated,
+    }
+
+
+@router.post("/subscription/play/verify")
+async def verify_google_play_subscription(
+    request: PlaySubscriptionVerifyRequest,
+    raw_request: Request,
+):
+    """Verify Google Play Billing purchase token and activate subscription."""
+    authenticated_phone = _get_authenticated_phone(raw_request, request.phone)
+    if authenticated_phone != request.phone:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Firebase authentication is required to verify Google Play purchases.",
+        )
+
+    if not user_registry.is_registered(request.phone):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Complete registration before activating subscription.",
+        )
+
+    plan = subscription_service.get_plan_by_product_id(request.product_id)
+    if not plan:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported product_id. Configure monthly_125, quarterly_275, or yearly_950.",
+        )
+
+    try:
+        verify_result = await google_play_billing_service.verify_subscription_purchase(
+            product_id=request.product_id,
+            purchase_token=request.purchase_token,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Google Play verification failed: {str(exc)}",
+        ) from exc
+
+    if not verify_result.get("is_active"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Purchase token is valid but subscription is not active. "
+                f"State: {verify_result.get('state', 'UNKNOWN')}"
+            ),
+        )
+
+    activated = subscription_service.activate_subscription(
+        phone=request.phone,
+        plan_code=plan["code"],
+        amount_paid=plan["price_inr"] * 100,
+        order_id=verify_result.get("latest_order_id") or f"play:{request.product_id}",
+        payment_id=request.purchase_id or request.purchase_token,
+    )
+
+    return {
+        "success": True,
+        "message": "Google Play subscription verified and activated.",
+        "subscription": activated,
+        "google_play_state": verify_result.get("state"),
+        "google_play_expiry": verify_result.get("expiry_time"),
     }
 
 

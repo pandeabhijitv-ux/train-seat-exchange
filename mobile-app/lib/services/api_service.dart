@@ -191,6 +191,29 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>> verifyPlaySubscriptionPurchase({
+    required String phone,
+    required String productId,
+    required String purchaseToken,
+    String? purchaseId,
+  }) async {
+    try {
+      final response = await _dio.post(
+        ApiConfig.subscriptionPlayVerify,
+        data: {
+          'phone': phone,
+          'product_id': productId,
+          'purchase_token': purchaseToken,
+          if (purchaseId != null && purchaseId.isNotEmpty) 'purchase_id': purchaseId,
+        },
+        options: await _authOptions(),
+      );
+      return response.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
   // ========== Entry Methods ==========
   
   Future<Map<String, dynamic>> createEntry({required SeatEntry entry}) async {

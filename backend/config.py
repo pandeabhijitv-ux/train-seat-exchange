@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     # Razorpay
     razorpay_key_id: Optional[str] = None
     razorpay_key_secret: Optional[str] = None
+
+    # Google Play Billing
+    google_play_package_name: Optional[str] = None
+    google_play_service_account_path: Optional[str] = None
+    google_play_service_account_json: Optional[str] = None
     
     # PNR Verification API
     pnr_api_provider: str = "mock"  # Options: rapidapi, mock

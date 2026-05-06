@@ -29,6 +29,7 @@ class ApiConfig {
   static const String subscriptionStatus = '/subscription/status'; // Append /{phone}
   static const String subscriptionOrder = '/subscription/order';
   static const String subscriptionVerify = '/subscription/verify';
+  static const String subscriptionPlayVerify = '/subscription/play/verify';
   
   // Timeouts
   static const Duration connectionTimeout = Duration(seconds: 30);

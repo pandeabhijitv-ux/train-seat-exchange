@@ -34,6 +34,14 @@ class SubscriptionService:
         },
     }
 
+    PLAY_PRODUCT_TO_PLAN = {
+        "monthly_125": "monthly",
+        "quarterly_275": "quarterly",
+        "yearly_950": "yearly",
+    }
+
+    PLAN_TO_PLAY_PRODUCT = {value: key for key, value in PLAY_PRODUCT_TO_PLAN.items()}
+
     def __init__(self):
         self.db_path = os.path.join(settings.db_folder, "subscriptions.db")
         os.makedirs(settings.db_folder, exist_ok=True)
@@ -89,12 +97,19 @@ class SubscriptionService:
             {
                 **plan,
                 "amount_paise": plan["price_inr"] * 100,
+                "play_product_id": self.PLAN_TO_PLAY_PRODUCT.get(plan["code"]),
             }
             for plan in self.PLANS.values()
         ]
 
     def get_plan(self, plan_code: str) -> Optional[Dict]:
         return self.PLANS.get(plan_code)
+
+    def get_plan_by_product_id(self, product_id: str) -> Optional[Dict]:
+        plan_code = self.PLAY_PRODUCT_TO_PLAN.get(product_id)
+        if not plan_code:
+            return None
+        return self.get_plan(plan_code)
 
     def save_pending_order(self, order_id: str, phone: str, plan_code: str, amount_paid: int):
         now = datetime.utcnow().isoformat()

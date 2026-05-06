@@ -69,6 +69,20 @@ class SubscriptionVerifyRequest(BaseModel):
         return value
 
 
+class PlaySubscriptionVerifyRequest(BaseModel):
+    """Request to verify a Google Play subscription purchase token"""
+    phone: str = Field(..., min_length=10, max_length=10)
+    product_id: str = Field(..., min_length=3, max_length=120)
+    purchase_token: str = Field(..., min_length=20, max_length=2000)
+    purchase_id: Optional[str] = Field(None, max_length=200)
+
+    @validator('phone')
+    def validate_play_verify_phone(cls, value):
+        if not value.isdigit():
+            raise ValueError('Phone number must contain only digits')
+        return value
+
+
 class SeatExchangeEntry(BaseModel):
     """Request to create seat exchange entry"""
     phone: str = Field(..., min_length=10, max_length=10)

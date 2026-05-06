@@ -30,6 +30,12 @@ services:
         sync: false
       - key: FIREBASE_CREDENTIALS_PATH
         value: /etc/secrets/firebase-service-account.json
+      - key: GOOGLE_PLAY_PACKAGE_NAME
+        value: com.trainexchange.train_seat_exchange
+      - key: GOOGLE_PLAY_SERVICE_ACCOUNT_PATH
+        value: /etc/secrets/google-play-service-account.json
+      - key: GOOGLE_PLAY_SERVICE_ACCOUNT_JSON
+        sync: false
     healthCheckPath: /health
 
 # Attach a persistent disk manually in the Render dashboard.
