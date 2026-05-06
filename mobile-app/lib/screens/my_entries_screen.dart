@@ -158,7 +158,7 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Subscription Required'),
         content: const Text(
-          'My Active Entries is available for active subscribers. Choose Monthly (₹125), Quarterly (₹275), or Yearly (₹950).',
+          'My Active Entries is available for active subscribers. Choose Per Transaction (₹15), Monthly (₹125), Quarterly (₹275), or Yearly (₹950).',
         ),
         actions: [
           TextButton(

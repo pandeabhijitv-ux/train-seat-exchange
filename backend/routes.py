@@ -56,7 +56,7 @@ def _enforce_active_subscription(phone: str):
         status_code=status.HTTP_402_PAYMENT_REQUIRED,
         detail=(
             "An active subscription is required for this feature. "
-            "Choose Monthly (₹125), Quarterly (₹275), or Yearly (₹950)."
+            "Choose Per Transaction (₹15), Monthly (₹125), Quarterly (₹275), or Yearly (₹950)."
         ),
     )
 
@@ -361,7 +361,10 @@ async def verify_google_play_subscription(
     if not plan:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Unsupported product_id. Configure monthly_125, quarterly_275, or yearly_950.",
+            detail=(
+                "Unsupported product_id. Configure transaction_15, monthly_125, "
+                "quarterly_275, or yearly_950."
+            ),
         )
 
     try:

@@ -179,6 +179,7 @@ class HomeScreen extends StatelessWidget {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Text(
+                        '✅ Per Transaction: ₹15\n'
                         '✅ Monthly: ₹125\n'
                         '✅ Quarterly: ₹275\n'
                         '✅ Yearly: ₹950\n'

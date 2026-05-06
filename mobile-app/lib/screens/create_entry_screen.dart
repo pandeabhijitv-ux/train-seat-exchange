@@ -70,7 +70,8 @@ class _CreateEntryScreenState extends State<CreateEntryScreen> {
             Text(
               '• Monthly: ₹125\n'
               '• Quarterly: ₹275\n'
-              '• Yearly: ₹950',
+              '• Yearly: ₹950\n'
+              '• Per Transaction: ₹15',
               style: TextStyle(fontSize: 14),
             ),
             SizedBox(height: 16),

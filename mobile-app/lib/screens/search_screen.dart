@@ -164,7 +164,7 @@ class _SearchScreenState extends State<SearchScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Subscription Required'),
         content: const Text(
-          'Search is available for active subscribers. Choose Monthly (₹125), Quarterly (₹275), or Yearly (₹950).',
+          'Search is available for active subscribers. Choose Per Transaction (₹15), Monthly (₹125), Quarterly (₹275), or Yearly (₹950).',
         ),
         actions: [
           TextButton(

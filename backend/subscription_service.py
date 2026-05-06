@@ -11,6 +11,13 @@ class SubscriptionService:
     """Manage subscription plans and active entitlements."""
 
     PLANS = {
+        "per_transaction": {
+            "code": "per_transaction",
+            "name": "Per Transaction",
+            "price_inr": 15,
+            "duration_days": 1,
+            "description": "Single-transaction access for 24 hours",
+        },
         "monthly": {
             "code": "monthly",
             "name": "Monthly",
@@ -35,6 +42,7 @@ class SubscriptionService:
     }
 
     PLAY_PRODUCT_TO_PLAN = {
+        "transaction_15": "per_transaction",
         "monthly_125": "monthly",
         "quarterly_275": "quarterly",
         "yearly_950": "yearly",
