@@ -25,6 +25,10 @@ class ApiConfig {
   static const String myActiveEntries = '/entry/my-active'; // Append /{phone}
   static const String verifyPnr = '/pnr/verify';
   static const String getUserLimits = '/user/limits'; // Append /{phone}
+  static const String subscriptionPlans = '/subscription/plans';
+  static const String subscriptionStatus = '/subscription/status'; // Append /{phone}
+  static const String subscriptionOrder = '/subscription/order';
+  static const String subscriptionVerify = '/subscription/verify';
   
   // Timeouts
   static const Duration connectionTimeout = Duration(seconds: 30);

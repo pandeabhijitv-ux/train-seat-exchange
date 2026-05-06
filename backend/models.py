@@ -43,6 +43,32 @@ class UserProfileResponse(BaseModel):
     last_verified_at: str
 
 
+class SubscriptionOrderRequest(BaseModel):
+    """Request to create a subscription payment order"""
+    phone: str = Field(..., min_length=10, max_length=10)
+    plan_code: str = Field(..., min_length=3, max_length=20)
+
+    @validator('phone')
+    def validate_subscription_phone(cls, value):
+        if not value.isdigit():
+            raise ValueError('Phone number must contain only digits')
+        return value
+
+
+class SubscriptionVerifyRequest(BaseModel):
+    """Request to verify a completed subscription payment"""
+    phone: str = Field(..., min_length=10, max_length=10)
+    order_id: str = Field(..., min_length=10, max_length=80)
+    payment_id: str = Field(..., min_length=10, max_length=80)
+    signature: str = Field(..., min_length=10, max_length=200)
+
+    @validator('phone')
+    def validate_verify_phone(cls, value):
+        if not value.isdigit():
+            raise ValueError('Phone number must contain only digits')
+        return value
+
+
 class SeatExchangeEntry(BaseModel):
     """Request to create seat exchange entry"""
     phone: str = Field(..., min_length=10, max_length=10)

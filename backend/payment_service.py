@@ -14,12 +14,18 @@ class PaymentService:
             self.client = razorpay.Client(
                 auth=(settings.razorpay_key_id, settings.razorpay_key_secret)
             )
-        self.entry_amount = 500  # ₹5 in paise
+        self.entry_amount = 500  # Legacy per-entry amount in paise
         
         # In-memory payment tracking (for production, use database/Redis)
         self.verified_payments: Dict[str, Dict] = {}
     
-    def create_order(self, phone: str, amount: int = None) -> Dict:
+    def create_order(
+        self,
+        phone: str,
+        amount: int = None,
+        purpose: str = "Train seat exchange entry",
+        plan_code: str | None = None,
+    ) -> Dict:
         """Create a Razorpay order for payment"""
         if amount is None:
             amount = self.entry_amount
@@ -37,7 +43,8 @@ class PaymentService:
                 'payment_capture': 1,  # Auto capture
                 'notes': {
                     'phone': phone,
-                    'purpose': 'Train seat exchange entry'
+                    'purpose': purpose,
+                    'plan_code': plan_code or '',
                 }
             }
             

@@ -125,6 +125,72 @@ class ApiService {
     }
   }
 
+  // ========== Subscription Methods ==========
+
+  Future<List<dynamic>> getSubscriptionPlans() async {
+    try {
+      final response = await _dio.get(ApiConfig.subscriptionPlans);
+      final data = response.data as Map<String, dynamic>;
+      return data['plans'] as List<dynamic>? ?? <dynamic>[];
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> getSubscriptionStatus(String phone) async {
+    try {
+      final response = await _dio.get(
+        '${ApiConfig.subscriptionStatus}/$phone',
+        options: await _authOptions(),
+      );
+      return response.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> createSubscriptionOrder({
+    required String phone,
+    required String planCode,
+  }) async {
+    try {
+      final response = await _dio.post(
+        ApiConfig.subscriptionOrder,
+        data: {
+          'phone': phone,
+          'plan_code': planCode,
+        },
+        options: await _authOptions(),
+      );
+      return response.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> verifySubscriptionPayment({
+    required String phone,
+    required String orderId,
+    required String paymentId,
+    required String signature,
+  }) async {
+    try {
+      final response = await _dio.post(
+        ApiConfig.subscriptionVerify,
+        data: {
+          'phone': phone,
+          'order_id': orderId,
+          'payment_id': paymentId,
+          'signature': signature,
+        },
+        options: await _authOptions(),
+      );
+      return response.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
   // ========== Entry Methods ==========
   
   Future<Map<String, dynamic>> createEntry({required SeatEntry entry}) async {

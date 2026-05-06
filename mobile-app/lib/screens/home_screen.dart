@@ -5,6 +5,7 @@ import 'create_entry_screen.dart';
 import 'my_entries_screen.dart';
 import 'otp_screen.dart';
 import 'search_screen.dart';
+import 'subscription_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -89,6 +90,30 @@ class HomeScreen extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 height: 56,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const SubscriptionScreen(),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.workspace_premium_outlined),
+                  label: const Text(
+                    'View Subscription Plans',
+                    style: TextStyle(fontSize: 16),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.deepOrange.shade700,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                height: 56,
                 child: OutlinedButton.icon(
                   onPressed: () {
                     Navigator.push(
@@ -136,7 +161,7 @@ class HomeScreen extends StatelessWidget {
                 child: Column(
                   children: [
                     Text(
-                      '₹500 = 10 Entries',
+                      'Subscription Required',
                       style: TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
@@ -154,10 +179,10 @@ class HomeScreen extends StatelessWidget {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Text(
-                        '✅ PNR Auto-Fill\n'
-                        '✅ Direct Phone Contact\n'
-                        '✅ Unlimited Searches\n'
-                        '✅ Valid until 2hrs after departure',
+                        '✅ Monthly: ₹125\n'
+                        '✅ Quarterly: ₹275\n'
+                        '✅ Yearly: ₹950\n'
+                        '✅ Unlock Create, Search and My Entries',
                         textAlign: TextAlign.center,
                         style: TextStyle(fontSize: 12, height: 1.5),
                       ),
@@ -170,7 +195,7 @@ class HomeScreen extends StatelessWidget {
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        '💡 Need more? Reinstall for ₹500 = 10 more entries!',
+                        '💡 Install free, subscribe only when you want full access.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 11,

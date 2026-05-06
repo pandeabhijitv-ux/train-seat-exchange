@@ -5,6 +5,7 @@ import '../models/user_profile.dart';
 import '../services/api_service.dart';
 import '../services/user_profile_service.dart';
 import 'otp_screen.dart';
+import 'subscription_screen.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -148,8 +149,43 @@ class _SearchScreenState extends State<SearchScreen> {
       setState(() {
         _isLoading = false;
       });
+
+      if (error.toString().contains('active subscription is required')) {
+        _showSubscriptionPrompt();
+        return;
+      }
       _showSnackBar('Search failed: ${error.toString()}', Colors.red);
     }
+  }
+
+  void _showSubscriptionPrompt() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Subscription Required'),
+        content: const Text(
+          'Search is available for active subscribers. Choose Monthly (₹125), Quarterly (₹275), or Yearly (₹950).',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Later'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const SubscriptionScreen(),
+                ),
+              );
+            },
+            child: const Text('View Plans'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _openVerificationFlow() async {

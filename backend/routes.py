@@ -1,10 +1,13 @@
 from fastapi import APIRouter, HTTPException, Request, status
 from models import (
     PhoneVerifyRequest, OTPVerifyRequest, SeatExchangeEntry, SearchRequest,
-    EntryResponse, UserRegisterRequest, UserProfileResponse
+    EntryResponse, UserRegisterRequest, UserProfileResponse,
+    SubscriptionOrderRequest, SubscriptionVerifyRequest,
 )
 from otp_service import otp_service
 from firebase_auth_service import firebase_auth_service
+from payment_service import payment_service
+from subscription_service import subscription_service
 from pnr_service import pnr_service
 from database import db
 from user_limits import user_limits
@@ -42,6 +45,19 @@ def _mask_phone(phone: str) -> str:
     if len(phone) < 5:
         return "XXXXX"
     return f"{phone[:5]}XXXXX"
+
+
+def _enforce_active_subscription(phone: str):
+    if subscription_service.is_active(phone):
+        return
+
+    raise HTTPException(
+        status_code=status.HTTP_402_PAYMENT_REQUIRED,
+        detail=(
+            "An active subscription is required for this feature. "
+            "Choose Monthly (₹125), Quarterly (₹275), or Yearly (₹950)."
+        ),
+    )
 
 
 # ============== PNR Verification Endpoint ==============
@@ -159,6 +175,7 @@ async def get_user_limits(phone: str, raw_request: Request):
     
     total_entries = user_limits.get_user_entry_count(phone)
     remaining = user_limits.get_remaining_entries(phone)
+    subscription = subscription_service.get_subscription(phone)
     
     return {
         "success": True,
@@ -166,7 +183,157 @@ async def get_user_limits(phone: str, raw_request: Request):
         "total_entries": total_entries,
         "max_entries": user_limits.MAX_ENTRIES_PER_USER,
         "remaining_entries": remaining,
-        "can_create_more": remaining > 0
+        "can_create_more": remaining > 0,
+        "subscription": subscription,
+    }
+
+
+# ============== Subscription Endpoints ==============
+
+@router.get("/subscription/plans")
+async def get_subscription_plans():
+    """Get available subscription plans."""
+    return {
+        "success": True,
+        "plans": subscription_service.get_plans(),
+    }
+
+
+@router.get("/subscription/status/{phone}")
+async def get_subscription_status(phone: str, raw_request: Request):
+    """Get a user's current subscription status."""
+    if len(phone) != 10 or not phone.isdigit():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid phone number format"
+        )
+
+    authenticated_phone = _get_authenticated_phone(raw_request, phone)
+    if authenticated_phone != phone:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Firebase authentication is required to view subscription status."
+        )
+
+    subscription = subscription_service.get_subscription(phone)
+    return {
+        "success": True,
+        "phone": phone,
+        "is_active": bool(subscription and subscription.get("is_active")),
+        "subscription": subscription,
+    }
+
+
+@router.post("/subscription/order")
+async def create_subscription_order(request: SubscriptionOrderRequest, raw_request: Request):
+    """Create Razorpay order for subscription purchase."""
+    authenticated_phone = _get_authenticated_phone(raw_request, request.phone)
+    if authenticated_phone != request.phone:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Firebase authentication is required to create subscription orders."
+        )
+
+    if not user_registry.is_registered(request.phone):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Complete registration before purchasing a subscription."
+        )
+
+    plan = subscription_service.get_plan(request.plan_code)
+    if not plan:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid subscription plan selected."
+        )
+
+    amount_paise = plan["price_inr"] * 100
+    order_result = payment_service.create_order(
+        phone=request.phone,
+        amount=amount_paise,
+        purpose=f"Subscription purchase: {plan['name']}",
+        plan_code=plan["code"],
+    )
+
+    if not order_result.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=order_result.get("message", "Unable to create subscription order."),
+        )
+
+    subscription_service.save_pending_order(
+        order_id=order_result["order_id"],
+        phone=request.phone,
+        plan_code=plan["code"],
+        amount_paid=amount_paise,
+    )
+
+    return {
+        "success": True,
+        "order": order_result,
+        "plan": {
+            "code": plan["code"],
+            "name": plan["name"],
+            "price_inr": plan["price_inr"],
+            "duration_days": plan["duration_days"],
+        },
+    }
+
+
+@router.post("/subscription/verify")
+async def verify_subscription_payment(request: SubscriptionVerifyRequest, raw_request: Request):
+    """Verify Razorpay payment and activate subscription."""
+    authenticated_phone = _get_authenticated_phone(raw_request, request.phone)
+    if authenticated_phone != request.phone:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Firebase authentication is required to verify subscription payment."
+        )
+
+    pending_order = subscription_service.get_pending_order(request.order_id)
+    if not pending_order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Subscription order not found."
+        )
+
+    if pending_order.get("consumed") == 1:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This subscription order is already consumed."
+        )
+
+    if pending_order["phone"] != request.phone:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Subscription order does not belong to this phone number."
+        )
+
+    verify_result = payment_service.verify_payment(
+        order_id=request.order_id,
+        payment_id=request.payment_id,
+        signature=request.signature,
+    )
+
+    if not verify_result.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=verify_result.get("message", "Payment verification failed."),
+        )
+
+    activated = subscription_service.activate_subscription(
+        phone=request.phone,
+        plan_code=pending_order["plan_code"],
+        amount_paid=pending_order["amount_paid"],
+        order_id=request.order_id,
+        payment_id=request.payment_id,
+    )
+    subscription_service.consume_pending_order(request.order_id)
+
+    return {
+        "success": True,
+        "message": "Subscription activated successfully.",
+        "subscription": activated,
     }
 
 
@@ -195,6 +362,8 @@ async def create_entry(request: SeatExchangeEntry, raw_request: Request):
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Complete phone verification and registration before creating an entry."
         )
+
+    _enforce_active_subscription(request.phone)
     
     # Check for duplicate entry (one entry per train per phone)
     if db.check_duplicate_entry(request.phone, request.train_number, request.train_date):
@@ -244,6 +413,9 @@ async def search_entries(request: SearchRequest, raw_request: Request):
             authenticated_phone == request.requester_phone and
             user_registry.is_registered(request.requester_phone)
         )
+
+        if request.requester_phone:
+            _enforce_active_subscription(request.requester_phone)
 
         entries = db.search_entries(
             request.train_number,
@@ -297,6 +469,7 @@ async def get_my_active_entries(phone: str, raw_request: Request):
         )
 
     can_view_contact = user_registry.is_registered(phone)
+    _enforce_active_subscription(phone)
     entries = db.get_user_entries(phone)
 
     enriched_entries = []

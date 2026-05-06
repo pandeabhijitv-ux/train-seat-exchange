@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
-import '../services/entry_limit_service.dart';
 import '../models/seat_entry.dart';
 
 class CreateEntryScreen extends StatefulWidget {
@@ -18,7 +17,6 @@ class CreateEntryScreen extends StatefulWidget {
 class _CreateEntryScreenState extends State<CreateEntryScreen> {
   final _formKey = GlobalKey<FormState>();
   final ApiService _apiService = ApiService();
-  final EntryLimitService _limitService = EntryLimitService();
   
   // Controllers
   final _pnrController = TextEditingController();
@@ -32,13 +30,6 @@ class _CreateEntryScreenState extends State<CreateEntryScreen> {
   
   bool _isLoading = false;
   bool _pnrVerified = false;
-  int _remainingEntries = 10;
-
-  @override
-  void initState() {
-    super.initState();
-    _checkRemainingEntries();
-  }
 
   @override
   void dispose() {
@@ -53,39 +44,23 @@ class _CreateEntryScreenState extends State<CreateEntryScreen> {
     super.dispose();
   }
 
-  Future<void> _checkRemainingEntries() async {
-    try {
-      final remaining = await _limitService.getRemainingEntries();
-      setState(() {
-        _remainingEntries = remaining;
-      });
-      
-      // Show limit reached dialog if no entries left
-      if (remaining <= 0 && mounted) {
-        _showLimitReachedDialog();
-      }
-    } catch (e) {
-      // Ignore error, will show default
-    }
-  }
-
-  void _showLimitReachedDialog() {
+  void _showSubscriptionRequiredDialog() {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: const Text('⚠️ Entry Limit Reached'),
+        title: const Text('🔒 Subscription Required'),
         content: const Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'You have used all 10 entries included with your purchase.',
+              'Create entry is available only for active subscribers.',
               style: TextStyle(fontSize: 16),
             ),
             SizedBox(height: 16),
             Text(
-              '💡 Need more entries?',
+              'Choose a plan:',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 16,
@@ -93,15 +68,14 @@ class _CreateEntryScreenState extends State<CreateEntryScreen> {
             ),
             SizedBox(height: 8),
             Text(
-              '1. Uninstall this app\n'
-              '2. Reinstall from Play Store\n'
-              '3. Purchase again for ₹500\n'
-              '4. Get 10 more entries!',
+              '• Monthly: ₹125\n'
+              '• Quarterly: ₹275\n'
+              '• Yearly: ₹950',
               style: TextStyle(fontSize: 14),
             ),
             SizedBox(height: 16),
             Text(
-              'Note: You can still search for seat exchanges without creating new entries.',
+              'Open the Subscription Plans screen from home to continue.',
               style: TextStyle(
                 fontSize: 12,
                 fontStyle: FontStyle.italic,
@@ -215,13 +189,6 @@ class _CreateEntryScreenState extends State<CreateEntryScreen> {
       return;
     }
 
-    // Check device-based limit
-    final canCreate = await _limitService.canCreateEntry();
-    if (!canCreate) {
-      _showLimitReachedDialog();
-      return;
-    }
-
     setState(() => _isLoading = true);
 
     try {
@@ -241,14 +208,9 @@ class _CreateEntryScreenState extends State<CreateEntryScreen> {
       if (result['success'] == true) {
         final int matchCount = result['match_count'] as int? ?? 0;
         final List<dynamic> matches = result['matches'] as List<dynamic>? ?? [];
-
-        // Increment local counter
-        final newCount = await _limitService.incrementEntryCount();
-        final remaining = await _limitService.getRemainingEntries();
         
         setState(() {
           _isLoading = false;
-          _remainingEntries = remaining;
         });
 
         if (mounted) {
@@ -295,35 +257,6 @@ class _CreateEntryScreenState extends State<CreateEntryScreen> {
                       ),
                     ),
                   ],
-                  const SizedBox(height: 12),
-                  Text(
-                    'Entries used: $newCount/10',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  Text(
-                    'Remaining: $remaining',
-                    style: TextStyle(
-                      color: remaining > 0 ? Colors.green : Colors.red,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  if (remaining == 0) ...[
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.orange.shade50,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: const Text(
-                        '💡 All entries used! Uninstall and reinstall to get 10 more entries for ₹500.',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
                 ],
               ),
               actions: [
@@ -352,6 +285,10 @@ class _CreateEntryScreenState extends State<CreateEntryScreen> {
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
+        if (e.toString().contains('active subscription is required')) {
+          _showSubscriptionRequiredDialog();
+          return;
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error: ${e.toString()}'),
@@ -376,39 +313,28 @@ class _CreateEntryScreenState extends State<CreateEntryScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Remaining Entries Banner
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: _remainingEntries > 0 
-                      ? Colors.green.shade50 
-                      : Colors.red.shade50,
+                  color: Colors.blue.shade50,
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: _remainingEntries > 0 
-                        ? Colors.green 
-                        : Colors.red,
+                    color: Colors.blue,
                   ),
                 ),
                 child: Row(
                   children: [
                     Icon(
-                      _remainingEntries > 0 
-                          ? Icons.check_circle 
-                          : Icons.warning,
-                      color: _remainingEntries > 0 
-                          ? Colors.green 
-                          : Colors.red,
+                      Icons.workspace_premium_outlined,
+                      color: Colors.blue,
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'You have $_remainingEntries of 10 entries remaining',
+                        'Active subscription required for creating entries',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: _remainingEntries > 0 
-                              ? Colors.green.shade900 
-                              : Colors.red.shade900,
+                          color: Colors.blue.shade900,
                         ),
                       ),
                     ),
